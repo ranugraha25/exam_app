@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ujian Online</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --ink:#1B2340;
+    --ink-soft:#4A4F6A;
+    --paper:#FBFAF7;
+    --paper-alt:#F1EFE8;
+    --accent:#2F8F7B;
+    --accent-soft:#E4F1EE;
+    --warn:#C08A2E;
+    --warn-soft:#FBF1DF;
+    --danger:#B33A3A;
+    --danger-soft:#FBEAEA;
+    --line:#DEDACD;
+    --font-serif:'Source Serif 4', Georgia, serif;
+    --font-sans:'Inter', system-ui, -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--font-sans);
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.5;
+    min-height:100vh;
+  }
+  h1,h2,h3{font-family:var(--font-serif); font-weight:600; margin:0 0 4px 0;}
+  a{color:var(--accent);}
+  .hidden{display:none !important;}
+  button{
+    font-family:var(--font-sans);
+    cursor:pointer;
+    border:1px solid var(--ink);
+    background:var(--ink);
+    color:var(--paper);
+    padding:10px 18px;
+    border-radius:3px;
+    font-size:14px;
+    font-weight:600;
+    transition:opacity .15s ease;
+  }
+  button:hover{opacity:.85;}
+  button.secondary{background:transparent; color:var(--ink); border:1px solid var(--line);}
+  .sidebar button.secondary{color:var(--paper); border-color:rgba(255,255,255,.3);}
+  button.danger{background:var(--danger); border-color:var(--danger);}
+  button.small{padding:6px 12px; font-size:13px;}
+  button:disabled{opacity:.45; cursor:not-allowed;}
+  input,select,textarea{
+    font-family:var(--font-sans);
+    font-size:14px;
+    padding:9px 11px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    background:#fff;
+    color:var(--ink);
+    width:100%;
+  }
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  label{font-size:13px; font-weight:600; color:var(--ink-soft); display:block; margin-bottom:5px;}
+  .field{margin-bottom:14px;}
+  .card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:20px;
+  }
+  .muted{color:var(--ink-soft); font-size:13px;}
+  .badge{
+    display:inline-block;
+    font-size:12px;
+    font-weight:600;
+    padding:3px 9px;
+    border-radius:20px;
+  }
+  .badge.accent{background:var(--accent-soft); color:var(--accent);}
+  .badge.warn{background:var(--warn-soft); color:var(--warn);}
+  .badge.danger{background:var(--danger-soft); color:var(--danger);}
+  .badge.neutral{background:var(--paper-alt); color:var(--ink-soft);}
+
+  /* ---------- Centered auth / config screens ---------- */
+  .center-screen{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .auth-box{width:100%; max-width:400px;}
+  .auth-box .brand{text-align:center; margin-bottom:28px;}
+  .auth-box .brand h1{font-size:26px;}
+  .tabs{display:flex; gap:4px; margin-bottom:20px; border-bottom:1px solid var(--line);}
+  .tabs button.tab{
+    background:none; border:none; color:var(--ink-soft); font-weight:600;
+    padding:10px 4px; margin-right:20px; border-bottom:2px solid transparent; border-radius:0;
+  }
+  .tabs button.tab.active{color:var(--ink); border-bottom-color:var(--accent);}
+  #authError{color:var(--danger); font-size:13px; margin-top:10px;}
+  #configError{color:var(--danger); font-size:13px; margin-top:10px;}
+
+  /* ---------- App shell ---------- */
+  .app-shell{display:flex; min-height:100vh;}
+  .sidebar{
+    width:230px; flex-shrink:0;
+    background:var(--ink); color:var(--paper);
+    padding:24px 16px; display:flex; flex-direction:column;
+  }
+  .sidebar .brand{font-family:var(--font-serif); font-size:19px; font-weight:600; margin-bottom:4px;}
+  .sidebar .role-tag{font-size:12px; opacity:.65; margin-bottom:28px;}
+  .sidebar nav{display:flex; flex-direction:column; gap:2px; flex:1;}
+  .sidebar nav button{
+    background:none; border:none; color:var(--paper); text-align:left;
+    padding:10px 12px; border-radius:4px; font-weight:500; opacity:.75;
+  }
+  .sidebar nav button.active{background:rgba(255,255,255,.12); opacity:1;}
+  .sidebar .user-info{font-size:13px; opacity:.75; margin-bottom:10px; word-break:break-word;}
+  .main{flex:1; padding:32px 40px; max-width:1100px;}
+  .main-header{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px; gap:16px; flex-wrap:wrap;}
+  .view{display:none;}
+  .view.active{display:block;}
+
+  table{width:100%; border-collapse:collapse; font-size:14px;}
+  th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--line);}
+  th{font-size:12px; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); font-weight:600;}
+  tr:last-child td{border-bottom:none;}
+  .row-actions{display:flex; gap:8px;}
+  .empty-state{padding:36px 20px; text-align:center; color:var(--ink-soft); border:1px dashed var(--line); border-radius:6px;}
+
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .stack{display:flex; flex-direction:column; gap:14px;}
+  .list-item{border:1px solid var(--line); border-radius:6px; padding:16px; margin-bottom:10px; background:#fff;}
+  .list-item-top{display:flex; justify-content:space-between; gap:12px; align-items:flex-start;}
+
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(27,35,64,.45); display:flex;
+    align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto; z-index:50;
+  }
+  .modal{background:#fff; border-radius:8px; padding:26px; width:100%; max-width:560px;}
+  .modal h2{margin-bottom:18px;}
+  .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:20px;}
+
+  .option-row{display:flex; gap:8px; align-items:center; margin-bottom:8px;}
+  .option-row input[type=text]{flex:1;}
+  .option-row input[type=radio]{width:auto;}
+
+  /* ---------- Exam-taking screen ---------- */
+  .exam-topbar{
+    position:sticky; top:0; background:var(--ink); color:var(--paper);
+    padding:14px 28px; display:flex; justify-content:space-between; align-items:center; z-index:10;
+  }
+  .timer{font-family:var(--font-serif); font-size:22px; font-weight:600;}
+  .timer.low{color:#F0B4B4;}
+  .exam-body{max-width:760px; margin:0 auto; padding:32px 20px 80px;}
+  .q-nav{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:24px;}
+  .q-nav button{
+    width:34px; height:34px; padding:0; border-radius:4px; background:#fff; color:var(--ink);
+    border:1px solid var(--line); font-weight:600; font-size:13px;
+  }
+  .q-nav button.answered{background:var(--accent-soft); border-color:var(--accent); color:var(--accent);}
+  .q-nav button.current{background:var(--ink); color:#fff; border-color:var(--ink);}
+  .question-card{background:#fff; border:1px solid var(--line); border-radius:6px; padding:24px; margin-bottom:20px;}
+  .question-card .q-points{float:right;}
+  .choice{
+    display:flex; gap:10px; align-items:flex-start; padding:11px 12px; border:1px solid var(--line);
+    border-radius:5px; margin-bottom:8px; cursor:pointer;
+  }
+  .choice:hover{border-color:var(--accent);}
+  .choice.selected{border-color:var(--accent); background:var(--accent-soft);}
+  .choice input{width:auto; margin-top:3px;}
+  .exam-nav-buttons{display:flex; justify-content:space-between; margin-top:20px;}
+  .violation-toast{
+    position:fixed; bottom:20px; right:20px; background:var(--danger); color:#fff;
+    padding:12px 18px; border-radius:5px; font-size:13px; z-index:60; max-width:300px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ SCREEN: AUTH ============ -->
+<div id="screen-auth" class="center-screen hidden">
+  <div class="auth-box">
+    <div class="brand"><h1>Ujian Online</h1><p class="muted">Masuk untuk mengerjakan atau mengelola ujian.</p></div>
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" id="tabLogin" onclick="setAuthTab('login')">Masuk</button>
+        <button class="tab" id="tabSignup" onclick="setAuthTab('signup')">Daftar</button>
+      </div>
+      <div id="signupNameField" class="field hidden">
+        <label>Nama Lengkap</label>
+        <input id="authName" type="text" placeholder="Nama Anda" />
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input id="authEmail" type="email" placeholder="nama@email.com" />
+      </div>
+      <div class="field">
+        <label>Kata Sandi</label>
+        <input id="authPassword" type="password" placeholder="Minimal 6 karakter" />
+      </div>
+      <button id="authSubmitBtn" onclick="submitAuth()" style="width:100%">Masuk</button>
+      <div id="authError"></div>
+      <p class="muted" style="margin-top:14px; font-size:12px;">Akun baru otomatis berperan sebagai peserta. Admin pertama diaktifkan lewat SQL Editor Supabase (lihat schema.sql).</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP SHELL (Admin & Peserta share layout) ============ -->
+<div id="appShell" class="app-shell hidden">
+  <div class="sidebar">
+    <div class="brand">Ujian Online</div>
+    <div class="role-tag" id="sidebarRole">-</div>
+    <nav id="sidebarNav"></nav>
+    <div class="user-info" id="sidebarUser"></div>
+    <button class="secondary" onclick="signOut()">Keluar</button>
+  </div>
+  <div class="main">
+
+    <!-- ---- ADMIN: EXAMS ---- -->
+    <div class="view" id="view-admin-exams">
+      <div class="main-header">
+        <div><h2>Ujian</h2><p class="muted">Buat dan kelola daftar ujian.</p></div>
+        <button onclick="openExamModal()">+ Ujian Baru</button>
+      </div>
+      <div id="examListContainer"></div>
+    </div>
+
+    <!-- ---- ADMIN: QUESTIONS ---- -->
+    <div class="view" id="view-admin-questions">
+      <div class="main-header">
+        <div>
+          <h2 id="questionsExamTitle">Soal</h2>
+          <p class="muted">Kelola soal untuk ujian ini.</p>
+        </div>
+        <div class="row-actions">
+          <button class="secondary" onclick="showView('admin-exams')">&larr; Kembali</button>
+          <button onclick="openQuestionModal()">+ Soal Baru</button>
+        </div>
+      </div>
+      <div id="questionListContainer"></div>
+    </div>
+
+    <!-- ---- ADMIN: USERS ---- -->
+    <div class="view" id="view-admin-users">
+      <div class="main-header">
+        <div><h2>Pengguna</h2><p class="muted">Kelola peran pengguna yang sudah mendaftar. Untuk menambah akun baru, minta mereka mendaftar lewat halaman Masuk/Daftar, lalu jadikan admin di sini bila perlu.</p></div>
+      </div>
+      <div id="userListContainer"></div>
+    </div>
+
+    <!-- ---- ADMIN: RESULTS ---- -->
+    <div class="view" id="view-admin-results">
+      <div class="main-header">
+        <div><h2>Hasil &amp; Nilai</h2><p class="muted">Rekap seluruh pengerjaan ujian peserta.</p></div>
+        <select id="resultsExamFilter" style="width:220px" onchange="loadResults()"></select>
+      </div>
+      <div id="resultsContainer"></div>
+    </div>
+
+    <!-- ---- PESERTA: EXAM LIST ---- -->
+    <div class="view" id="view-peserta-exams">
+      <div class="main-header">
+        <div><h2>Daftar Ujian</h2><p class="muted">Pilih ujian yang tersedia untuk dikerjakan.</p></div>
+      </div>
+      <div id="pesertaExamListContainer"></div>
+    </div>
+
+    <!-- ---- PESERTA: RESULTS ---- -->
+    <div class="view" id="view-peserta-results">
+      <div class="main-header">
+        <div><h2>Nilai Saya</h2><p class="muted">Riwayat dan hasil ujian yang sudah dikerjakan.</p></div>
+      </div>
+      <div id="pesertaResultsContainer"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============ EXAM TAKING SCREEN ============ -->
+<div id="screen-take-exam" class="hidden">
+  <div class="exam-topbar">
+    <div><strong id="takeExamTitle">-</strong></div>
+    <div class="timer" id="examTimer">--:--</div>
+  </div>
+  <div class="exam-body">
+    <div class="q-nav" id="qNav"></div>
+    <div id="questionArea"></div>
+    <div class="exam-nav-buttons">
+      <button class="secondary" id="prevQBtn" onclick="gotoQuestion(currentQIndex-1)">&larr; Sebelumnya</button>
+      <button class="danger" onclick="confirmSubmitExam()">Selesai &amp; Kumpulkan</button>
+      <button id="nextQBtn" onclick="gotoQuestion(currentQIndex+1)">Berikutnya &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generic modal mount point -->
+<div id="modalMount"></div>
+
+<script>
+/* =====================================================================
+   KONFIGURASI SUPABASE — GANTI DENGAN MILIK ANDA SENDIRI
+   Ambil dari Supabase Dashboard > Project Settings > API.
+   Anon/public key ini MEMANG dirancang untuk berada di sisi klien (dilindungi
+   oleh Row Level Security di database), jadi aman ditanam di sini.
+   JANGAN PERNAH menaruh service_role key di file ini.
+===================================================================== */
+const SUPABASE_URL = "https://yajewdsiwqasbbxjdtew.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_xfh6yTNOlcmV2YeLJ2YINA_33h3H0De";
+const ADMIN_USERS_FUNCTION_URL = SUPABASE_URL + "/functions/v1/admin-users";
+
+/* =====================================================================
+   STATE
+===================================================================== */
+let sb = null;
+let currentUser = null;
+let currentProfile = null;
+let examsCache = [];
+let questionsCache = [];
+let activeExamForQuestions = null;
+
+// exam-taking state
+let takingExam = null;
+let takingQuestions = [];
+let takingAttemptId = null;
+let takingAnswers = {}; // question_id -> answer_text
+let currentQIndex = 0;
+let examTimerInterval = null;
+let examDeadline = null;
+let violationCount = 0;
+
+/* =====================================================================
+   INIT
+===================================================================== */
+window.addEventListener('DOMContentLoaded', () => {
+  if (!SUPABASE_URL.startsWith('https://') || SUPABASE_URL.includes('xxxxxxxxxxxx')){
+    document.body.innerHTML = '<div class="center-screen"><div class="card" style="max-width:480px;">' +
+      '<h2>Konfigurasi belum diisi</h2>' +
+      '<p class="muted">Buka file <code>index.html</code>, cari konstanta <code>SUPABASE_URL</code> dan ' +
+      '<code>SUPABASE_ANON_KEY</code> di bagian atas &lt;script&gt;, lalu ganti dengan nilai dari ' +
+      'Supabase Dashboard &gt; Project Settings &gt; API. Simpan file, lalu buka ulang halaman ini.</p>' +
+      '</div></div>';
+    return;
+  }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  checkSession();
+});
+
+async function checkSession(){
+  const { data } = await sb.auth.getSession();
+  if (data.session){
+    currentUser = data.session.user;
+    await loadProfileAndRoute();
+  } else {
+    document.getElementById('screen-auth').classList.remove('hidden');
+  }
+}
+
+/* =====================================================================
+   AUTH
+===================================================================== */
+let authMode = 'login';
+function setAuthTab(mode){
+  authMode = mode;
+  document.getElementById('tabLogin').classList.toggle('active', mode==='login');
+  document.getElementById('tabSignup').classList.toggle('active', mode==='signup');
+  document.getElementById('signupNameField').classList.toggle('hidden', mode!=='signup');
+  document.getElementById('authSubmitBtn').textContent = mode==='login' ? 'Masuk' : 'Daftar';
+  document.getElementById('authError').textContent = '';
+}
+
+async function submitAuth(){
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errEl = document.getElementById('authError');
+  errEl.textContent = '';
+  if (!email || !password){ errEl.textContent = 'Email dan kata sandi wajib diisi.'; return; }
+
+  if (authMode === 'signup'){
+    const fullName = document.getElementById('authName').value.trim();
+    const { data, error } = await sb.auth.signUp({
+      email, password,
+      options: { data: { full_name: fullName || email } }
+    });
+    if (error){ errEl.textContent = error.message; return; }
+    if (data.session){
+      currentUser = data.session.user;
+      await loadProfileAndRoute();
+    } else {
+      errEl.style.color = 'var(--accent)';
+      errEl.textContent = 'Pendaftaran berhasil. Silakan periksa email untuk konfirmasi, lalu masuk.';
+    }
+  } else {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error){ errEl.textContent = error.message; return; }
+    currentUser = data.user;
+    await loadProfileAndRoute();
+  }
+}
+
+async function signOut(){
+  await sb.auth.signOut();
+  currentUser = null; currentProfile = null;
+  document.getElementById('appShell').classList.add('hidden');
+  document.getElementById('screen-take-exam').classList.add('hidden');
+  document.getElementById('screen-auth').classList.remove('hidden');
+}
+
+async function loadProfileAndRoute(){
+  const { data, error } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
+  if (error || !data){
+    document.getElementById('authError').textContent = 'Gagal memuat profil: ' + (error ? error.message : 'tidak ditemukan');
+    return;
+  }
+  currentProfile = data;
+  document.getElementById('screen-auth').classList.add('hidden');
+  document.getElementById('appShell').classList.remove('hidden');
+  document.getElementById('sidebarUser').textContent = currentProfile.full_name + ' — ' + currentUser.email;
+  document.getElementById('sidebarRole').textContent = currentProfile.role === 'admin' ? 'Dasbor Admin' : 'Dasbor Peserta';
+  buildSidebarNav();
+  if (currentProfile.role === 'admin'){
+    showView('admin-exams');
+  } else {
+    showView('peserta-exams');
+  }
+}
+
+/* =====================================================================
+   NAVIGATION
+===================================================================== */
+function buildSidebarNav(){
+  const nav = document.getElementById('sidebarNav');
+  nav.innerHTML = '';
+  const items = currentProfile.role === 'admin'
+    ? [
+        ['admin-exams','Ujian'],
+        ['admin-users','Pengguna'],
+        ['admin-results','Hasil & Nilai'],
+      ]
+    : [
+        ['peserta-exams','Daftar Ujian'],
+        ['peserta-results','Nilai Saya'],
+      ];
+  items.forEach(([id,label]) => {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.id = 'nav-' + id;
+    btn.onclick = () => showView(id);
+    nav.appendChild(btn);
+  });
+}
+
+function showView(id){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('#sidebarNav button').forEach(b => b.classList.remove('active'));
+  const target = document.getElementById('view-' + id);
+  if (target) target.classList.add('active');
+  const navBtn = document.getElementById('nav-' + id.split('-').slice(0,2).join('-'));
+  if (navBtn) navBtn.classList.add('active');
+
+  if (id === 'admin-exams') loadExams();
+  if (id === 'admin-users') loadUsers();
+  if (id === 'admin-results') loadResults(true);
+  if (id === 'peserta-exams') loadPesertaExams();
+  if (id === 'peserta-results') loadPesertaResults();
+}
+
+function fmtDate(iso){
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return d.toLocaleString('id-ID', { dateStyle:'medium', timeStyle:'short' });
+}
+function escapeHtml(s){
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* =====================================================================
+   MODAL HELPER
+===================================================================== */
+function openModal(html){
+  document.getElementById('modalMount').innerHTML =
+    '<div class="modal-backdrop" onclick="if(event.target===this) closeModal()"><div class="modal">' + html + '</div></div>';
+}
+function closeModal(){ document.getElementById('modalMount').innerHTML = ''; }
+
+/* =====================================================================
+   ADMIN: EXAMS
+===================================================================== */
+async function loadExams(){
+  const { data, error } = await sb.from('exams').select('*').order('created_at', { ascending:false });
+  const c = document.getElementById('examListContainer');
+  if (error){ c.innerHTML = '<div class="empty-state">Gagal memuat ujian: ' + escapeHtml(error.message) + '</div>'; return; }
+  examsCache = data;
+  if (!data.length){ c.innerHTML = '<div class="empty-state">Belum ada ujian. Klik "+ Ujian Baru" untuk membuat.</div>'; return; }
+  c.innerHTML = data.map(e => `
+    <div class="list-item">
+      <div class="list-item-top">
+        <div>
+          <h3>${escapeHtml(e.title)}</h3>
+          <p class="muted">${escapeHtml(e.description || '')}</p>
+          <p class="muted">Durasi: ${e.duration_minutes} menit · Mulai: ${fmtDate(e.start_time)} · Selesai: ${fmtDate(e.end_time)}</p>
+        </div>
+        <div style="text-align:right;">
+          <span class="badge ${e.is_active ? 'accent' : 'neutral'}">${e.is_active ? 'Aktif' : 'Nonaktif'}</span><br/>
+          <span class="badge ${e.restricted ? 'warn' : 'neutral'}" style="margin-top:6px;">${e.restricted ? 'Peserta terbatas' : 'Semua peserta'}</span>
+        </div>
+      </div>
+      <div class="row-actions" style="margin-top:12px;">
+        <button class="small secondary" onclick="manageQuestions('${e.id}')">Kelola Soal</button>
+        <button class="small secondary" onclick="manageExamAccess('${e.id}')">Kelola Akses</button>
+        <button class="small secondary" onclick="openExamModal('${e.id}')">Edit</button>
+        <button class="small secondary" onclick="toggleExamActive('${e.id}', ${!e.is_active})">${e.is_active ? 'Nonaktifkan' : 'Aktifkan'}</button>
+        <button class="small danger" onclick="deleteExam('${e.id}')">Hapus</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openExamModal(examId){
+  const e = examId ? examsCache.find(x => x.id === examId) : null;
+  const toLocalInput = iso => iso ? new Date(iso).toISOString().slice(0,16) : '';
+  openModal(`
+    <h2>${e ? 'Edit Ujian' : 'Ujian Baru'}</h2>
+    <div class="field"><label>Judul</label><input id="mExamTitle" value="${e ? escapeHtml(e.title) : ''}" /></div>
+    <div class="field"><label>Deskripsi</label><textarea id="mExamDesc" rows="2">${e ? escapeHtml(e.description||'') : ''}</textarea></div>
+    <div class="grid-2">
+      <div class="field"><label>Durasi (menit)</label><input id="mExamDuration" type="number" min="1" value="${e ? e.duration_minutes : 60}" /></div>
+      <div class="field"><label>Acak urutan soal?</label>
+        <select id="mExamShuffle"><option value="false" ${e && !e.shuffle_questions ? 'selected':''}>Tidak</option><option value="true" ${e && e.shuffle_questions ? 'selected':''}>Ya</option></select>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Waktu Mulai</label><input id="mExamStart" type="datetime-local" value="${toLocalInput(e?.start_time)}" /></div>
+      <div class="field"><label>Waktu Selesai</label><input id="mExamEnd" type="datetime-local" value="${toLocalInput(e?.end_time)}" /></div>
+    </div>
+    <div class="field"><label>Siapa yang boleh mengikuti ujian ini?</label>
+      <select id="mExamRestricted">
+        <option value="false" ${!e || !e.restricted ? 'selected':''}>Semua peserta</option>
+        <option value="true" ${e && e.restricted ? 'selected':''}>Hanya peserta terpilih</option>
+      </select>
+      <p class="muted" style="margin-top:6px;">${e ? 'Atur daftar peserta terpilih lewat tombol "Kelola Akses" di daftar ujian setelah disimpan.' : 'Simpan dulu, lalu atur daftar peserta terpilih lewat tombol "Kelola Akses".'}</p>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal()">Batal</button>
+      <button onclick="saveExam('${e ? e.id : ''}')">Simpan</button>
+    </div>
+  `);
+}
+
+async function saveExam(examId){
+  const payload = {
+    title: document.getElementById('mExamTitle').value.trim(),
+    description: document.getElementById('mExamDesc').value.trim(),
+    duration_minutes: parseInt(document.getElementById('mExamDuration').value || '60', 10),
+    shuffle_questions: document.getElementById('mExamShuffle').value === 'true',
+    restricted: document.getElementById('mExamRestricted').value === 'true',
+    start_time: document.getElementById('mExamStart').value ? new Date(document.getElementById('mExamStart').value).toISOString() : null,
+    end_time: document.getElementById('mExamEnd').value ? new Date(document.getElementById('mExamEnd').value).toISOString() : null,
+  };
+  if (!payload.title){ alert('Judul wajib diisi.'); return; }
+  let error;
+  if (examId){
+    ({ error } = await sb.from('exams').update(payload).eq('id', examId));
+  } else {
+    payload.created_by = currentProfile.id;
+    payload.is_active = true;
+    ({ error } = await sb.from('exams').insert(payload));
+  }
+  if (error){ alert('Gagal menyimpan: ' + error.message); return; }
+  closeModal(); loadExams();
+}
+
+async function toggleExamActive(examId, newVal){
+  const { error } = await sb.from('exams').update({ is_active:newVal }).eq('id', examId);
+  if (error){ alert('Gagal mengubah status: ' + error.message); return; }
+  loadExams();
+}
+
+async function deleteExam(examId){
+  if (!confirm('Hapus ujian ini beserta seluruh soal dan hasil pengerjaannya? Tindakan ini tidak bisa dibatalkan.')) return;
+  const { error } = await sb.from('exams').delete().eq('id', examId);
+  if (error){ alert('Gagal menghapus: ' + error.message); return; }
+  loadExams();
+}
+
+async function manageExamAccess(examId){
+  const exam = examsCache.find(e => e.id === examId);
+  const [{ data: allUsers }, { data: allowed }] = await Promise.all([
+    sb.from('profiles').select('*').eq('role', 'peserta').order('full_name', { ascending:true }),
+    sb.from('exam_participants').select('user_id').eq('exam_id', examId),
+  ]);
+  const allowedIds = new Set((allowed||[]).map(a => a.user_id));
+
+  openModal(`
+    <h2>Kelola Akses — ${escapeHtml(exam.title)}</h2>
+    <div class="field"><label>Mode akses</label>
+      <select id="mAccessMode" onchange="document.getElementById('accessListWrap').classList.toggle('hidden', this.value==='false')">
+        <option value="false" ${!exam.restricted ? 'selected':''}>Semua peserta boleh ikut</option>
+        <option value="true" ${exam.restricted ? 'selected':''}>Hanya peserta yang dicentang</option>
+      </select>
+    </div>
+    <div id="accessListWrap" class="${exam.restricted ? '' : 'hidden'}">
+      <label>Peserta yang diizinkan</label>
+      ${!allUsers || !allUsers.length ? '<p class="muted">Belum ada akun bertipe peserta.</p>' : `
+        <div style="max-height:260px; overflow-y:auto; border:1px solid var(--line); border-radius:5px; padding:8px 12px;">
+          ${allUsers.map(u => `
+            <label style="display:flex; align-items:center; gap:8px; padding:6px 0;">
+              <input type="checkbox" class="accessUserCb" value="${u.id}" ${allowedIds.has(u.id) ? 'checked':''} style="width:auto;" />
+              ${escapeHtml(u.full_name)}
+            </label>
+          `).join('')}
+        </div>`}
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal()">Batal</button>
+      <button onclick="saveExamAccess('${examId}')">Simpan</button>
+    </div>
+  `);
+}
+
+async function saveExamAccess(examId){
+  const restricted = document.getElementById('mAccessMode').value === 'true';
+  const selectedIds = [...document.querySelectorAll('.accessUserCb:checked')].map(cb => cb.value);
+
+  const { error: examErr } = await sb.from('exams').update({ restricted }).eq('id', examId);
+  if (examErr){ alert('Gagal menyimpan mode akses: ' + examErr.message); return; }
+
+  // sinkronkan daftar peserta: hapus semua lalu insert ulang (sederhana & konsisten)
+  const { error: delErr } = await sb.from('exam_participants').delete().eq('exam_id', examId);
+  if (delErr){ alert('Gagal memperbarui daftar akses: ' + delErr.message); return; }
+  if (restricted && selectedIds.length){
+    const { error: insErr } = await sb.from('exam_participants').insert(
+      selectedIds.map(uid => ({ exam_id: examId, user_id: uid }))
+    );
+    if (insErr){ alert('Gagal menyimpan daftar akses: ' + insErr.message); return; }
+  }
+  closeModal(); loadExams();
+}
+
+/* =====================================================================
+   ADMIN: QUESTIONS
+===================================================================== */
+function manageQuestions(examId){
+  activeExamForQuestions = examsCache.find(e => e.id === examId);
+  document.getElementById('questionsExamTitle').textContent = 'Soal — ' + (activeExamForQuestions ? activeExamForQuestions.title : '');
+  showView('admin-questions');
+  loadQuestions(examId);
+}
+
+async function loadQuestions(examId){
+  const { data, error } = await sb.from('questions').select('*').eq('exam_id', examId).order('order_index', { ascending:true });
+  const c = document.getElementById('questionListContainer');
+  if (error){ c.innerHTML = '<div class="empty-state">Gagal memuat soal: ' + escapeHtml(error.message) + '</div>'; return; }
+  questionsCache = data;
+  if (!data.length){ c.innerHTML = '<div class="empty-state">Belum ada soal untuk ujian ini.</div>'; return; }
+  const typeLabel = { multiple_choice:'Pilihan Ganda', true_false:'Benar/Salah', short_answer:'Isian Singkat', essay:'Esai' };
+  c.innerHTML = data.map((q,i) => `
+    <div class="list-item">
+      <div class="list-item-top">
+        <div>
+          <span class="badge neutral">${typeLabel[q.question_type]}</span>
+          <span class="badge accent" style="margin-left:6px;">${q.points} poin</span>
+          <h3 style="margin-top:8px;">${i+1}. ${escapeHtml(q.question_text)}</h3>
+          ${renderQuestionOptionsPreview(q)}
+        </div>
+      </div>
+      <div class="row-actions" style="margin-top:10px;">
+        <button class="small secondary" onclick="openQuestionModal('${q.id}')">Edit</button>
+        <button class="small danger" onclick="deleteQuestion('${q.id}')">Hapus</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderQuestionOptionsPreview(q){
+  if (q.question_type === 'multiple_choice'){
+    const opts = q.options || [];
+    return '<ul class="muted">' + opts.map(o => `<li>${o.id === q.correct_answer ? '<strong>' : ''}${escapeHtml(o.text)}${o.id === q.correct_answer ? ' (jawaban benar)</strong>' : ''}</li>`).join('') + '</ul>';
+  }
+  if (q.question_type === 'true_false'){
+    return `<p class="muted">Jawaban benar: <strong>${q.correct_answer === 'true' ? 'Benar' : 'Salah'}</strong></p>`;
+  }
+  return '<p class="muted">Dinilai manual oleh admin.</p>';
+}
+
+function openQuestionModal(questionId){
+  const q = questionId ? questionsCache.find(x => x.id === questionId) : null;
+  const type = q ? q.question_type : 'multiple_choice';
+  openModal(`
+    <h2>${q ? 'Edit Soal' : 'Soal Baru'}</h2>
+    <div class="field"><label>Pertanyaan</label><textarea id="mQText" rows="3">${q ? escapeHtml(q.question_text) : ''}</textarea></div>
+    <div class="grid-2">
+      <div class="field"><label>Tipe Soal</label>
+        <select id="mQType" onchange="renderQTypeFields()">
+          <option value="multiple_choice" ${type==='multiple_choice'?'selected':''}>Pilihan Ganda</option>
+          <option value="true_false" ${type==='true_false'?'selected':''}>Benar/Salah</option>
+          <option value="short_answer" ${type==='short_answer'?'selected':''}>Isian Singkat</option>
+          <option value="essay" ${type==='essay'?'selected':''}>Esai</option>
+        </select>
+      </div>
+      <div class="field"><label>Poin</label><input id="mQPoints" type="number" min="0" step="0.5" value="${q ? q.points : 1}" /></div>
+    </div>
+    <div id="mQTypeFields"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal()">Batal</button>
+      <button onclick="saveQuestion('${q ? q.id : ''}')">Simpan</button>
+    </div>
+  `);
+  renderQTypeFields(q);
+}
+
+function renderQTypeFields(q){
+  const type = document.getElementById('mQType').value;
+  const holder = document.getElementById('mQTypeFields');
+  if (type === 'multiple_choice'){
+    const opts = (q && q.question_type==='multiple_choice' && q.options && q.options.length) ? q.options : [{id:'a',text:''},{id:'b',text:''},{id:'c',text:''},{id:'d',text:''}];
+    const correct = (q && q.question_type==='multiple_choice') ? q.correct_answer : opts[0].id;
+    holder.innerHTML = '<label>Pilihan Jawaban (pilih radio untuk jawaban benar)</label>' +
+      opts.map(o => `
+        <div class="option-row">
+          <input type="radio" name="mcCorrect" value="${o.id}" ${o.id===correct?'checked':''} />
+          <input type="text" data-oid="${o.id}" class="mcOptionText" value="${escapeHtml(o.text)}" placeholder="Teks pilihan ${o.id.toUpperCase()}" />
+        </div>
+      `).join('');
+  } else if (type === 'true_false'){
+    const correct = (q && q.question_type==='true_false') ? q.correct_answer : 'true';
+    holder.innerHTML = `
+      <label>Jawaban Benar</label>
+      <select id="tfCorrect">
+        <option value="true" ${correct==='true'?'selected':''}>Benar</option>
+        <option value="false" ${correct==='false'?'selected':''}>Salah</option>
+      </select>`;
+  } else {
+    holder.innerHTML = '<p class="muted">Tipe ini dijawab bebas oleh peserta dan dinilai manual oleh admin di menu Hasil &amp; Nilai.</p>';
+  }
+}
+
+async function saveQuestion(questionId){
+  const type = document.getElementById('mQType').value;
+  const payload = {
+    exam_id: activeExamForQuestions.id,
+    question_text: document.getElementById('mQText').value.trim(),
+    question_type: type,
+    points: parseFloat(document.getElementById('mQPoints').value || '1'),
+  };
+  if (!payload.question_text){ alert('Pertanyaan wajib diisi.'); return; }
+
+  if (type === 'multiple_choice'){
+    const texts = [...document.querySelectorAll('.mcOptionText')];
+    payload.options = texts.map(t => ({ id: t.dataset.oid, text: t.value.trim() }));
+    if (payload.options.some(o => !o.text)){ alert('Semua pilihan jawaban wajib diisi.'); return; }
+    const checked = document.querySelector('input[name="mcCorrect"]:checked');
+    payload.correct_answer = checked ? checked.value : null;
+  } else if (type === 'true_false'){
+    payload.options = [];
+    payload.correct_answer = document.getElementById('tfCorrect').value;
+  } else {
+    payload.options = [];
+    payload.correct_answer = null;
+  }
+
+  let error;
+  if (questionId){
+    ({ error } = await sb.from('questions').update(payload).eq('id', questionId));
+  } else {
+    payload.order_index = questionsCache.length;
+    ({ error } = await sb.from('questions').insert(payload));
+  }
+  if (error){ alert('Gagal menyimpan soal: ' + error.message); return; }
+  closeModal(); loadQuestions(activeExamForQuestions.id);
+}
+
+async function deleteQuestion(questionId){
+  if (!confirm('Hapus soal ini?')) return;
+  const { error } = await sb.from('questions').delete().eq('id', questionId);
+  if (error){ alert('Gagal menghapus: ' + error.message); return; }
+  loadQuestions(activeExamForQuestions.id);
+}
+
+/* =====================================================================
+   ADMIN: USERS (create / edit / delete lewat Edge Function admin-users)
+===================================================================== */
+let usersCache = [];
+
+async function callAdminUsersFunction(payload){
+  const { data: sessionData } = await sb.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) throw new Error('Sesi tidak ditemukan, silakan login ulang.');
+  const res = await fetch(ADMIN_USERS_FUNCTION_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || ('Permintaan gagal (' + res.status + ')'));
+  return json;
+}
+
+async function loadUsers(){
+  const { data, error } = await sb.from('profiles').select('*').order('created_at', { ascending:false });
+  const c = document.getElementById('userListContainer');
+  if (error){ c.innerHTML = '<div class="empty-state">Gagal memuat pengguna: ' + escapeHtml(error.message) + '</div>'; return; }
+  usersCache = data;
+  if (!data.length){ c.innerHTML = '<div class="empty-state">Belum ada pengguna terdaftar.</div>'; return; }
+  c.innerHTML = `
+    <div style="margin-bottom:14px;"><button onclick="openUserModal()">+ Tambah Pengguna</button></div>
+    <table><thead><tr><th>Nama</th><th>Peran</th><th>Terdaftar</th><th></th></tr></thead>
+    <tbody>
+      ${data.map(u => `
+        <tr>
+          <td>${escapeHtml(u.full_name)}</td>
+          <td><span class="badge ${u.role==='admin' ? 'warn' : 'neutral'}">${u.role === 'admin' ? 'Admin' : 'Peserta'}</span></td>
+          <td class="muted">${fmtDate(u.created_at)}</td>
+          <td class="row-actions">
+            <button class="small secondary" onclick="openUserModal('${u.id}')">Edit</button>
+            <button class="small danger" ${u.id===currentProfile.id?'disabled':''} onclick="deleteUser('${u.id}','${escapeHtml(u.full_name)}')">Hapus</button>
+          </td>
+        </tr>
+      `).join('')}
+    </tbody></table>`;
+}
+
+function openUserModal(userId){
+  const u = userId ? usersCache.find(x => x.id === userId) : null;
+  openModal(`
+    <h2>${u ? 'Edit Pengguna' : 'Tambah Pengguna'}</h2>
+    <div class="field"><label>Nama Lengkap</label><input id="mUserName" value="${u ? escapeHtml(u.full_name) : ''}" /></div>
+    <div class="field"><label>Email</label><input id="mUserEmail" type="email" ${u ? 'placeholder="Kosongkan jika tidak diubah"' : ''} value="${u ? '' : ''}" /></div>
+    <div class="field"><label>${u ? 'Kata Sandi Baru (opsional)' : 'Kata Sandi'}</label><input id="mUserPassword" type="password" placeholder="${u ? 'Kosongkan jika tidak diubah' : 'Minimal 6 karakter'}" /></div>
+    <div class="field"><label>Peran</label>
+      <select id="mUserRole">
+        <option value="peserta" ${!u || u.role==='peserta' ? 'selected':''}>Peserta</option>
+        <option value="admin" ${u && u.role==='admin' ? 'selected':''}>Admin</option>
+      </select>
+    </div>
+    <div id="userModalError" style="color:var(--danger); font-size:13px;"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal()">Batal</button>
+      <button onclick="saveUser('${u ? u.id : ''}')">Simpan</button>
+    </div>
+  `);
+}
+
+async function saveUser(userId){
+  const errEl = document.getElementById('userModalError');
+  errEl.textContent = '';
+  const full_name = document.getElementById('mUserName').value.trim();
+  const email = document.getElementById('mUserEmail').value.trim();
+  const password = document.getElementById('mUserPassword').value;
+  const role = document.getElementById('mUserRole').value;
+
+  if (!full_name){ errEl.textContent = 'Nama wajib diisi.'; return; }
+  if (!userId && (!email || !password)){ errEl.textContent = 'Email dan kata sandi wajib diisi untuk pengguna baru.'; return; }
+
+  try{
+    if (userId){
+      await callAdminUsersFunction({ action:'update', user_id:userId, full_name, role, email: email || undefined, password: password || undefined });
+    } else {
+      await callAdminUsersFunction({ action:'create', full_name, role, email, password });
+    }
+    closeModal();
+    loadUsers();
+  }catch(e){
+    errEl.textContent = e.message;
+  }
+}
+
+async function deleteUser(userId, name){
+  if (!confirm('Hapus pengguna "' + name + '"? Akun dan riwayat login akan dihapus permanen (riwayat ujian tetap tersimpan).')) return;
+  try{
+    await callAdminUsersFunction({ action:'delete', user_id:userId });
+    loadUsers();
+  }catch(e){
+    alert('Gagal menghapus: ' + e.message);
+  }
+}
+
+/* =====================================================================
+   ADMIN: RESULTS + GRADING
+===================================================================== */
+async function loadResults(refreshFilter){
+  if (refreshFilter){
+    const sel = document.getElementById('resultsExamFilter');
+    const { data: exams } = await sb.from('exams').select('id,title').order('created_at', { ascending:false });
+    sel.innerHTML = '<option value="">Semua Ujian</option>' + (exams||[]).map(e => `<option value="${e.id}">${escapeHtml(e.title)}</option>`).join('');
+  }
+  const examFilter = document.getElementById('resultsExamFilter').value;
+  let query = sb.from('exam_attempts').select('*, exams(title), profiles(full_name)').order('started_at', { ascending:false });
+  if (examFilter) query = query.eq('exam_id', examFilter);
+  const { data, error } = await query;
+  const c = document.getElementById('resultsContainer');
+  if (error){ c.innerHTML = '<div class="empty-state">Gagal memuat hasil: ' + escapeHtml(error.message) + '</div>'; return; }
+  if (!data.length){ c.innerHTML = '<div class="empty-state">Belum ada pengerjaan ujian.</div>'; return; }
+  c.innerHTML = `
+    <table><thead><tr><th>Peserta</th><th>Ujian</th><th>Percobaan</th><th>Status</th><th>Nilai</th><th>Dikumpulkan</th><th></th></tr></thead>
+    <tbody>
+      ${data.map(a => `
+        <tr>
+          <td>${escapeHtml(a.profiles?.full_name || '-')}</td>
+          <td>${escapeHtml(a.exams?.title || '-')}</td>
+          <td>${a.attempt_number > 1 ? 'Remedial #' + a.attempt_number : 'Ke-1'}</td>
+          <td><span class="badge ${a.status==='graded'?'accent':a.status==='submitted'?'warn':'neutral'}">${statusLabel(a.status)}</span></td>
+          <td>${a.score != null ? a.score + ' / ' + a.max_score : '-'}</td>
+          <td class="muted">${fmtDate(a.submitted_at)}</td>
+          <td class="row-actions">
+            <button class="small secondary" onclick="openGradingModal('${a.id}')">Lihat / Nilai</button>
+            ${a.status !== 'in_progress' ? `<button class="small secondary" onclick="grantRemedial('${a.exam_id}','${a.user_id}','${escapeHtml(a.exams?.title||'')}','${escapeHtml(a.profiles?.full_name||'')}')">Beri Remedial</button>` : ''}
+          </td>
+        </tr>
+      `).join('')}
+    </tbody></table>`;
+}
+
+async function grantRemedial(examId, userId, examTitle, userName){
+  if (!confirm(`Beri kesempatan ujian ulang (remedial) untuk "${userName}" pada ujian "${examTitle}"?`)) return;
+  const { error } = await sb.from('exam_remedial_grants').insert({ exam_id: examId, user_id: userId, granted_by: currentProfile.id });
+  if (error){
+    if (error.message && error.message.toLowerCase().includes('duplicate')){
+      alert('Peserta ini sudah punya kesempatan remedial yang belum dipakai untuk ujian ini.');
+    } else {
+      alert('Gagal memberi remedial: ' + error.message);
+    }
+    return;
+  }
+  alert('Kesempatan remedial berhasil diberikan. Peserta akan melihat tombol "Mulai Ujian Remedial" di dashboard mereka.');
+  loadResults();
+}
+function statusLabel(s){ return s==='graded' ? 'Sudah Dinilai' : s==='submitted' ? 'Menunggu Penilaian' : 'Sedang Dikerjakan'; }
+
+async function openGradingModal(attemptId){
+  const { data: attempt } = await sb.from('exam_attempts').select('*, exams(title), profiles(full_name)').eq('id', attemptId).single();
+  const { data: answers } = await sb.from('answers').select('*, questions(*)').eq('attempt_id', attemptId);
+  const { data: logs } = await sb.from('proctoring_logs').select('*').eq('attempt_id', attemptId).order('event_time', { ascending:true });
+
+  const answerRows = (answers||[]).sort((a,b)=> (a.questions.order_index||0)-(b.questions.order_index||0)).map(a => {
+    const q = a.questions;
+    const needsManual = q.question_type === 'short_answer' || q.question_type === 'essay';
+    return `
+      <div class="list-item">
+        <p><strong>${escapeHtml(q.question_text)}</strong> <span class="badge neutral">${q.points} poin</span></p>
+        <p class="muted">Jawaban peserta: ${escapeHtml(a.answer_text) || '<em>(kosong)</em>'}</p>
+        ${needsManual ? `
+          <div class="field" style="max-width:160px;">
+            <label>Poin diberikan</label>
+            <input type="number" min="0" max="${q.points}" step="0.5" id="pts-${a.id}" value="${a.points_earned ?? 0}" />
+          </div>
+        ` : `<p class="muted">Otomatis dinilai: ${a.is_correct ? 'Benar' : 'Salah'} (${a.points_earned} poin)</p>`}
+      </div>`;
+  }).join('');
+
+  const logRows = (logs||[]).length ? logs.map(l => `<li>${fmtDate(l.event_time)} — ${proctorEventLabel(l.event_type)}</li>`).join('') : '<li class="muted">Tidak ada aktivitas mencurigakan tercatat.</li>';
+
+  openModal(`
+    <h2>${escapeHtml(attempt.profiles?.full_name)} — ${escapeHtml(attempt.exams?.title)}</h2>
+    <p class="muted">Status: ${statusLabel(attempt.status)} · Nilai saat ini: ${attempt.score != null ? attempt.score + ' / ' + attempt.max_score : '-'}</p>
+    <h3 style="margin-top:18px;">Log Pengawasan</h3>
+    <ul class="muted">${logRows}</ul>
+    <h3 style="margin-top:18px;">Jawaban</h3>
+    ${answerRows}
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal()">Tutup</button>
+      <button onclick="finalizeGrading('${attemptId}')">Simpan Penilaian</button>
+    </div>
+  `);
+}
+
+function proctorEventLabel(t){
+  const map = { tab_blur:'Berpindah tab / minimize', tab_focus:'Kembali ke tab ujian', fullscreen_exit:'Keluar dari mode layar penuh', copy_attempt:'Mencoba menyalin teks', paste_attempt:'Mencoba menempel teks', right_click:'Klik kanan' };
+  return map[t] || t;
+}
+
+async function finalizeGrading(attemptId){
+  const { data: answers } = await sb.from('answers').select('*, questions(points, question_type)').eq('attempt_id', attemptId);
+  let total = 0, max = 0;
+  for (const a of answers){
+    max += a.questions.points;
+    let earned = a.points_earned || 0;
+    if (a.questions.question_type === 'short_answer' || a.questions.question_type === 'essay'){
+      const input = document.getElementById('pts-' + a.id);
+      earned = input ? parseFloat(input.value || '0') : earned;
+      await sb.from('answers').update({ points_earned: earned }).eq('id', a.id);
+    }
+    total += earned;
+  }
+  const { error } = await sb.from('exam_attempts').update({ score: total, max_score: max, status:'graded' }).eq('id', attemptId);
+  if (error){ alert('Gagal menyimpan penilaian: ' + error.message); return; }
+  closeModal(); loadResults();
+}
+
+/* =====================================================================
+   PESERTA: EXAM LIST
+===================================================================== */
+async function loadPesertaExams(){
+  const now = new Date().toISOString();
+  const { data, error } = await sb.from('exams').select('*').eq('is_active', true).order('start_time', { ascending:true });
+  const c = document.getElementById('pesertaExamListContainer');
+  if (error){ c.innerHTML = '<div class="empty-state">Gagal memuat ujian: ' + escapeHtml(error.message) + '</div>'; return; }
+  if (!data.length){ c.innerHTML = '<div class="empty-state">Belum ada ujian yang tersedia saat ini.</div>'; return; }
+
+  const { data: myAttempts } = await sb.from('exam_attempts').select('exam_id,status,score,max_score,attempt_number,started_at').eq('user_id', currentProfile.id).order('attempt_number', { ascending:true });
+  const { data: myGrants } = await sb.from('exam_remedial_grants').select('exam_id').eq('user_id', currentProfile.id).eq('used', false);
+  const grantedExamIds = new Set((myGrants||[]).map(g => g.exam_id));
+
+  // ambil attempt TERBARU (attempt_number tertinggi) per exam
+  const latestAttemptMap = {};
+  (myAttempts||[]).forEach(a => { latestAttemptMap[a.exam_id] = a; });
+
+  c.innerHTML = data.map(e => {
+    const att = latestAttemptMap[e.id];
+    const hasRemedial = grantedExamIds.has(e.id);
+    const notYetOpen = e.start_time && e.start_time > now;
+    const closed = e.end_time && e.end_time < now;
+    let actionHtml;
+    if (att && att.status === 'in_progress'){
+      actionHtml = closed ? `<span class="badge danger">Waktu ujian sudah berakhir</span>` : `<button onclick="beginExam('${e.id}')">Lanjutkan Ujian</button>`;
+    } else if (att && hasRemedial){
+      actionHtml = closed
+        ? `<span class="badge danger">Waktu ujian sudah berakhir</span>`
+        : `<div class="stack" style="gap:4px;"><span class="badge warn">Kesempatan Remedial Diberikan</span><button onclick="beginExam('${e.id}')">Mulai Ujian Remedial</button></div>`;
+    } else if (att){
+      actionHtml = `<span class="badge accent">Sudah dikerjakan${att.attempt_number > 1 ? ' (percobaan ke-' + att.attempt_number + ')' : ''}</span>`;
+    } else if (closed){
+      actionHtml = `<span class="badge danger">Waktu ujian sudah berakhir</span>`;
+    } else if (notYetOpen){
+      actionHtml = `<span class="badge neutral">Belum dibuka — mulai ${fmtDate(e.start_time)}</span>`;
+    } else {
+      actionHtml = `<button onclick="beginExam('${e.id}')">Mulai Ujian</button>`;
+    }
+    return `
+      <div class="list-item">
+        <div class="list-item-top">
+          <div>
+            <h3>${escapeHtml(e.title)}</h3>
+            <p class="muted">${escapeHtml(e.description || '')}</p>
+            <p class="muted">Durasi: ${e.duration_minutes} menit ${e.start_time ? '· Tersedia: ' + fmtDate(e.start_time) + ' s/d ' + fmtDate(e.end_time) : ''}</p>
+          </div>
+          <div>${actionHtml}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* =====================================================================
+   PESERTA: TAKE EXAM
+===================================================================== */
+async function beginExam(examId){
+  const { data: exam, error: examErr } = await sb.from('exams').select('*').eq('id', examId).single();
+  if (examErr){ alert('Gagal memuat ujian: ' + examErr.message); return; }
+
+  // ambil attempt TERBARU milik peserta untuk ujian ini (kalau ada)
+  const { data: prevAttempts } = await sb.from('exam_attempts').select('*').eq('exam_id', examId).eq('user_id', currentProfile.id).order('attempt_number', { ascending:false }).limit(1);
+  let attempt = (prevAttempts && prevAttempts[0]) || null;
+
+  if (attempt && attempt.status === 'in_progress'){
+    // lanjutkan attempt yang sedang berjalan
+  } else {
+    // attempt pertama, atau percobaan remedial baru — RLS akan menolak
+    // kalau peserta belum diberi izin remedial oleh admin
+    const { data: newAttempt, error: insErr } = await sb.from('exam_attempts')
+      .insert({ exam_id: examId, user_id: currentProfile.id, status:'in_progress' })
+      .select().single();
+    if (insErr){
+      if (insErr.message && insErr.message.toLowerCase().includes('row-level security')){
+        alert('Ujian ini sudah pernah Anda kerjakan dan belum ada kesempatan remedial dari admin.');
+      } else {
+        alert('Gagal memulai ujian: ' + insErr.message);
+      }
+      return;
+    }
+    attempt = newAttempt;
+  }
+
+  const { data: questions, error: qErr } = await sb.from('questions').select('*').eq('exam_id', examId).order('order_index', { ascending:true });
+  if (qErr){ alert('Gagal memuat soal: ' + qErr.message); return; }
+
+  const { data: existingAnswers } = await sb.from('answers').select('*').eq('attempt_id', attempt.id);
+  takingAnswers = {};
+  (existingAnswers||[]).forEach(a => takingAnswers[a.question_id] = a.answer_text);
+
+  takingExam = exam;
+  takingAttemptId = attempt.id;
+  takingQuestions = exam.shuffle_questions ? shuffleArray([...questions]) : questions;
+  currentQIndex = 0;
+  violationCount = 0;
+
+  const startedAtMs = new Date(attempt.started_at).getTime();
+  examDeadline = startedAtMs + exam.duration_minutes * 60000;
+  if (exam.end_time){
+    examDeadline = Math.min(examDeadline, new Date(exam.end_time).getTime());
+  }
+
+  document.getElementById('appShell').classList.add('hidden');
+  document.getElementById('screen-take-exam').classList.remove('hidden');
+  document.getElementById('takeExamTitle').textContent = exam.title + (attempt.attempt_number > 1 ? ' (Remedial — percobaan ke-' + attempt.attempt_number + ')' : '');
+
+  attachProctoringListeners();
+  renderQNav();
+  gotoQuestion(0);
+  startTimer();
+}
+
+function shuffleArray(arr){
+  for (let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i+1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function startTimer(){
+  if (examTimerInterval) clearInterval(examTimerInterval);
+  examTimerInterval = setInterval(() => {
+    const remainMs = examDeadline - Date.now();
+    const el = document.getElementById('examTimer');
+    if (remainMs <= 0){
+      el.textContent = '00:00';
+      clearInterval(examTimerInterval);
+      submitExam(true);
+      return;
+    }
+    const mins = Math.floor(remainMs / 60000);
+    const secs = Math.floor((remainMs % 60000) / 1000);
+    el.textContent = String(mins).padStart(2,'0') + ':' + String(secs).padStart(2,'0');
+    el.classList.toggle('low', remainMs < 60000);
+  }, 1000);
+}
+
+function renderQNav(){
+  const nav = document.getElementById('qNav');
+  nav.innerHTML = takingQuestions.map((q,i) => `
+    <button class="${takingAnswers[q.id] ? 'answered' : ''} ${i===currentQIndex ? 'current' : ''}" onclick="gotoQuestion(${i})">${i+1}</button>
+  `).join('');
+}
+
+function gotoQuestion(index){
+  if (index < 0 || index >= takingQuestions.length) return;
+  currentQIndex = index;
+  const q = takingQuestions[index];
+  const area = document.getElementById('questionArea');
+  let bodyHtml = '';
+  if (q.question_type === 'multiple_choice'){
+    bodyHtml = (q.options||[]).map(o => `
+      <label class="choice ${takingAnswers[q.id]===o.id ? 'selected':''}">
+        <input type="radio" name="qopt" value="${o.id}" ${takingAnswers[q.id]===o.id?'checked':''} onchange="recordAnswer('${q.id}','${o.id}')" />
+        <span>${escapeHtml(o.text)}</span>
+      </label>`).join('');
+  } else if (q.question_type === 'true_false'){
+    bodyHtml = ['true','false'].map(v => `
+      <label class="choice ${takingAnswers[q.id]===v ? 'selected':''}">
+        <input type="radio" name="qopt" value="${v}" ${takingAnswers[q.id]===v?'checked':''} onchange="recordAnswer('${q.id}','${v}')" />
+        <span>${v==='true' ? 'Benar' : 'Salah'}</span>
+      </label>`).join('');
+  } else if (q.question_type === 'short_answer'){
+    bodyHtml = `<input type="text" placeholder="Jawaban singkat..." value="${escapeHtml(takingAnswers[q.id]||'')}" oninput="recordAnswer('${q.id}', this.value)" />`;
+  } else {
+    bodyHtml = `<textarea rows="6" placeholder="Tulis jawaban esai Anda..." oninput="recordAnswer('${q.id}', this.value)">${escapeHtml(takingAnswers[q.id]||'')}</textarea>`;
+  }
+  area.innerHTML = `
+    <div class="question-card">
+      <span class="badge accent q-points">${q.points} poin</span>
+      <h3>Soal ${index+1} dari ${takingQuestions.length}</h3>
+      <p style="margin:12px 0 18px;">${escapeHtml(q.question_text)}</p>
+      ${bodyHtml}
+    </div>`;
+  document.getElementById('prevQBtn').disabled = index === 0;
+  document.getElementById('nextQBtn').disabled = index === takingQuestions.length - 1;
+  renderQNav();
+}
+
+let saveDebounce = {};
+function recordAnswer(questionId, value){
+  takingAnswers[questionId] = value;
+  document.querySelectorAll('.choice').forEach(el => el.classList.remove('selected'));
+  const checked = document.querySelector('input[name="qopt"]:checked');
+  if (checked) checked.closest('.choice').classList.add('selected');
+  renderQNav();
+  clearTimeout(saveDebounce[questionId]);
+  saveDebounce[questionId] = setTimeout(() => saveAnswer(questionId, value), 500);
+}
+
+async function saveAnswer(questionId, value){
+  await sb.from('answers').upsert({
+    attempt_id: takingAttemptId,
+    question_id: questionId,
+    answer_text: value,
+  }, { onConflict: 'attempt_id,question_id' });
+}
+
+function confirmSubmitExam(){
+  const unanswered = takingQuestions.filter(q => !takingAnswers[q.id]).length;
+  const msg = unanswered > 0
+    ? `Masih ada ${unanswered} soal belum dijawab. Yakin ingin mengumpulkan ujian sekarang?`
+    : 'Kumpulkan jawaban ujian sekarang?';
+  if (confirm(msg)) submitExam(false);
+}
+
+async function submitExam(auto){
+  if (examTimerInterval) clearInterval(examTimerInterval);
+  detachProctoringListeners();
+
+  // auto-grade objective questions
+  let total = 0, max = 0;
+  for (const q of takingQuestions){
+    max += q.points;
+    const ans = takingAnswers[q.id] || '';
+    if (q.question_type === 'multiple_choice' || q.question_type === 'true_false'){
+      const correct = ans === q.correct_answer;
+      const earned = correct ? q.points : 0;
+      total += earned;
+      await sb.from('answers').upsert({
+        attempt_id: takingAttemptId, question_id: q.id, answer_text: ans,
+        is_correct: correct, points_earned: earned,
+      }, { onConflict:'attempt_id,question_id' });
+    } else {
+      await sb.from('answers').upsert({
+        attempt_id: takingAttemptId, question_id: q.id, answer_text: ans,
+      }, { onConflict:'attempt_id,question_id' });
+    }
+  }
+
+  const hasManual = takingQuestions.some(q => q.question_type==='short_answer' || q.question_type==='essay');
+  await sb.from('exam_attempts').update({
+    submitted_at: new Date().toISOString(),
+    status: 'submitted',
+    score: hasManual ? null : total,
+    max_score: max,
+  }).eq('id', takingAttemptId);
+
+  document.getElementById('screen-take-exam').classList.add('hidden');
+  document.getElementById('appShell').classList.remove('hidden');
+  showView('peserta-exams');
+  alert(auto ? 'Waktu habis. Ujian dikumpulkan otomatis.' : 'Ujian berhasil dikumpulkan.');
+}
+
+/* ---- Proctoring ---- */
+function attachProctoringListeners(){
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('blur', onWindowBlur);
+  document.addEventListener('copy', onCopyAttempt);
+  document.addEventListener('paste', onPasteAttempt);
+  document.addEventListener('contextmenu', onRightClick);
+}
+function detachProctoringListeners(){
+  document.removeEventListener('visibilitychange', onVisibilityChange);
+  window.removeEventListener('blur', onWindowBlur);
+  document.removeEventListener('copy', onCopyAttempt);
+  document.removeEventListener('paste', onPasteAttempt);
+  document.removeEventListener('contextmenu', onRightClick);
+}
+function onVisibilityChange(){ if (document.hidden) logProctorEvent('tab_blur'); else logProctorEvent('tab_focus'); }
+function onWindowBlur(){ logProctorEvent('tab_blur'); }
+function onCopyAttempt(e){ logProctorEvent('copy_attempt'); }
+function onPasteAttempt(e){ logProctorEvent('paste_attempt'); }
+function onRightClick(e){ e.preventDefault(); logProctorEvent('right_click'); }
+
+async function logProctorEvent(type){
+  violationCount++;
+  await sb.from('proctoring_logs').insert({ attempt_id: takingAttemptId, event_type: type });
+  if (['tab_blur','copy_attempt','paste_attempt'].includes(type)){
+    showViolationToast(proctorEventLabel(type) + ' — aktivitas ini tercatat.');
+  }
+}
+function showViolationToast(msg){
+  const t = document.createElement('div');
+  t.className = 'violation-toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+/* =====================================================================
+   PESERTA: MY RESULTS
+===================================================================== */
+async function loadPesertaResults(){
+  const { data, error } = await sb.from('exam_attempts').select('*, exams(title)').eq('user_id', currentProfile.id).order('started_at', { ascending:false });
+  const c = document.getElementById('pesertaResultsContainer');
+  if (error){ c.innerHTML = '<div class="empty-state">Gagal memuat nilai: ' + escapeHtml(error.message) + '</div>'; return; }
+  if (!data.length){ c.innerHTML = '<div class="empty-state">Anda belum mengerjakan ujian apa pun.</div>'; return; }
+  c.innerHTML = `
+    <table><thead><tr><th>Ujian</th><th>Percobaan</th><th>Status</th><th>Nilai</th><th>Dikumpulkan</th></tr></thead>
+    <tbody>
+      ${data.map(a => `
+        <tr>
+          <td>${escapeHtml(a.exams?.title || '-')}</td>
+          <td>${a.attempt_number > 1 ? 'Remedial #' + a.attempt_number : 'Ke-1'}</td>
+          <td><span class="badge ${a.status==='graded'?'accent':a.status==='submitted'?'warn':'neutral'}">${statusLabel(a.status)}</span></td>
+          <td>${a.score != null ? a.score + ' / ' + a.max_score : 'Menunggu penilaian'}</td>
+          <td class="muted">${fmtDate(a.submitted_at)}</td>
+        </tr>
+      `).join('')}
+    </tbody></table>`;
+}
+</script>
+</body>
+</html>
