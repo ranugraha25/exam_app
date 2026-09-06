@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
     --ink:#1B2340;
@@ -305,6 +308,11 @@
       <div class="main-header">
         <div><h2>Hasil &amp; Nilai</h2><p class="muted">Rekap seluruh pengerjaan ujian peserta.</p></div>
         <select id="resultsExamFilter" style="width:220px" onchange="loadResults()"></select>
+      </div>
+      <div class="row-actions" style="margin-bottom:14px;">
+        <button class="small secondary" onclick="exportResultsToExcel()">⬇ Excel (.xlsx)</button>
+        <button class="small secondary" onclick="exportResultsToPDF()">⬇ PDF</button>
+        <button class="small secondary" onclick="exportResultsToCSV()">⬇ CSV</button>
       </div>
       <div id="resultsContainer"></div>
     </div>
@@ -954,6 +962,80 @@ async function deleteUser(userId, name){
 /* =====================================================================
    ADMIN: RESULTS + GRADING
 ===================================================================== */
+let resultsCache = [];
+
+function buildResultsExportRows(){
+  return resultsCache.map(a => ({
+    'Peserta': a.profiles?.full_name || '-',
+    'Ujian': a.exams?.title || '-',
+    'Percobaan': a.attempt_number > 1 ? ('Remedial #' + a.attempt_number) : 'Ke-1',
+    'Status': statusLabel(a.status),
+    'Nilai': a.score != null ? a.score : '',
+    'Nilai Maksimal': a.max_score != null ? a.max_score : '',
+    'Kelulusan': (a.exams?.passing_score != null && a.score != null) ? (a.score >= a.exams.passing_score ? 'Lulus' : 'Tidak Lulus') : '-',
+    'Mulai': fmtDate(a.started_at),
+    'Dikumpulkan': fmtDate(a.submitted_at),
+  }));
+}
+
+function currentResultsExportLabel(){
+  const filterExamId = document.getElementById('resultsExamFilter').value;
+  const label = filterExamId ? (examsCache.find(e => e.id === filterExamId)?.title || 'ujian') : 'semua-ujian';
+  return label.replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-+|-+$/g, '');
+}
+
+function exportResultsToExcel(){
+  if (!resultsCache.length){ alert('Tidak ada data untuk diekspor. Pilih ujian lain atau pastikan sudah ada yang mengerjakan.'); return; }
+  const rows = buildResultsExportRows();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:22},{wch:26},{wch:14},{wch:18},{wch:8},{wch:14},{wch:12},{wch:20},{wch:20}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Hasil Ujian');
+  XLSX.writeFile(wb, `hasil-${currentResultsExportLabel()}.xlsx`);
+}
+
+function exportResultsToPDF(){
+  if (!resultsCache.length){ alert('Tidak ada data untuk diekspor. Pilih ujian lain atau pastikan sudah ada yang mengerjakan.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'landscape' });
+  const filterExamId = document.getElementById('resultsExamFilter').value;
+  const title = filterExamId ? (examsCache.find(e => e.id === filterExamId)?.title || 'Hasil Ujian') : 'Rekap Semua Ujian';
+
+  doc.setFontSize(14);
+  doc.text(title, 14, 15);
+  doc.setFontSize(9);
+  doc.setTextColor(90);
+  doc.text('Diunduh: ' + new Date().toLocaleString('id-ID'), 14, 21);
+
+  const rows = buildResultsExportRows();
+  doc.autoTable({
+    startY: 26,
+    head: [Object.keys(rows[0])],
+    body: rows.map(r => Object.values(r)),
+    styles: { fontSize:8, cellPadding:3 },
+    headStyles: { fillColor:[27,35,64], textColor:255 },
+    alternateRowStyles: { fillColor:[248,247,243] },
+  });
+  doc.save(`hasil-${currentResultsExportLabel()}.pdf`);
+}
+
+function exportResultsToCSV(){
+  if (!resultsCache.length){ alert('Tidak ada data untuk diekspor. Pilih ujian lain atau pastikan sudah ada yang mengerjakan.'); return; }
+  const rows = buildResultsExportRows();
+  const headers = Object.keys(rows[0]);
+  const csvLines = [headers.join(',')].concat(
+    rows.map(r => headers.map(h => '"' + String(r[h]).replace(/"/g, '""') + '"').join(','))
+  );
+  const csvContent = '\uFEFF' + csvLines.join('\n'); // BOM supaya karakter Indonesia rapi dibuka di Excel
+  const blob = new Blob([csvContent], { type:'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hasil-${currentResultsExportLabel()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 async function loadResults(refreshFilter){
   if (refreshFilter){
     const sel = document.getElementById('resultsExamFilter');
@@ -966,6 +1048,7 @@ async function loadResults(refreshFilter){
   const { data, error } = await query;
   const c = document.getElementById('resultsContainer');
   if (error){ c.innerHTML = '<div class="empty-state">Gagal memuat hasil: ' + escapeHtml(error.message) + '</div>'; return; }
+  resultsCache = data;
   if (!data.length){ c.innerHTML = '<div class="empty-state">Belum ada pengerjaan ujian.</div>'; return; }
   c.innerHTML = `
     <table><thead><tr><th>Peserta</th><th>Ujian</th><th>Percobaan</th><th>Status</th><th>Nilai</th><th>Kelulusan</th><th>Dikumpulkan</th><th></th></tr></thead>
