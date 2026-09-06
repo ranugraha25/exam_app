@@ -179,6 +179,52 @@
     position:fixed; bottom:20px; right:20px; background:var(--danger); color:#fff;
     padding:12px 18px; border-radius:5px; font-size:13px; z-index:60; max-width:300px;
   }
+
+  /* ---------- Tabel: bisa discroll horizontal di layar sempit ---------- */
+  #examListContainer, #questionListContainer, #userListContainer,
+  #resultsContainer, #monitoringContainer, #pesertaExamListContainer,
+  #pesertaResultsContainer { overflow-x:auto; }
+
+  /* ---------- Responsif: smartphone & layar sempit ---------- */
+  @media (max-width: 780px){
+    .app-shell{ flex-direction:column; }
+    .sidebar{
+      width:100%; flex-direction:row; flex-wrap:wrap; align-items:center;
+      padding:12px 16px; gap:10px 14px;
+    }
+    .sidebar .brand{ font-size:16px; margin-bottom:0; }
+    .sidebar .role-tag{ display:none; }
+    .sidebar nav{ flex-direction:row; flex-wrap:wrap; flex:1 1 auto; gap:4px; }
+    .sidebar nav button{ padding:8px 10px; font-size:13px; opacity:.85; }
+    .sidebar .user-info{ display:none; }
+    .sidebar button.secondary{ padding:8px 12px; font-size:13px; flex-shrink:0; }
+
+    .main{ padding:18px 14px 40px; }
+    .main-header{ flex-direction:column; align-items:stretch; gap:10px; }
+    .main-header select{ width:100% !important; }
+
+    .grid-2{ grid-template-columns:1fr; }
+    .modal-backdrop{ padding:16px 8px; align-items:center; }
+    .modal{ padding:18px; max-width:100%; }
+
+    table{ min-width:560px; font-size:13px; }
+    th,td{ padding:8px 6px; }
+
+    .exam-topbar{ padding:10px 16px; }
+    .timer{ font-size:18px; }
+    .exam-body{ padding:20px 12px 70px; }
+    .exam-nav-buttons{ flex-wrap:wrap; gap:8px; }
+    .exam-nav-buttons button{ flex:1 1 100%; order:2; }
+    .exam-nav-buttons button.danger{ order:1; }
+    .q-nav button{ width:30px; height:30px; font-size:12px; }
+
+    .auth-box{ max-width:100%; }
+    .center-screen{ padding:16px; }
+
+    .list-item-top{ flex-direction:column; }
+    .list-item-top > div:last-child{ text-align:left !important; margin-top:8px; }
+    .row-actions{ flex-wrap:wrap; }
+  }
 </style>
 </head>
 <body>
@@ -341,7 +387,6 @@ let currentQIndex = 0;
 let examTimerInterval = null;
 let examDeadline = null;
 let violationCount = 0;
-let monitoringInterval = null;
 
 /* =====================================================================
    INIT
@@ -413,7 +458,8 @@ async function submitAuth(){
 }
 
 async function signOut(){
-  if (monitoringInterval){ clearInterval(monitoringInterval); monitoringInterval = null; }
+  stopMonitoring();
+  localStorage.removeItem('examapp_last_view');
   await sb.auth.signOut();
   currentUser = null; currentProfile = null;
   document.getElementById('appShell').classList.add('hidden');
@@ -433,11 +479,11 @@ async function loadProfileAndRoute(){
   document.getElementById('sidebarUser').textContent = currentProfile.full_name + ' — ' + currentUser.email;
   document.getElementById('sidebarRole').textContent = currentProfile.role === 'admin' ? 'Dasbor Admin' : 'Dasbor Peserta';
   buildSidebarNav();
-  if (currentProfile.role === 'admin'){
-    showView('admin-exams');
-  } else {
-    showView('peserta-exams');
-  }
+  const validViews = currentProfile.role === 'admin'
+    ? ['admin-exams','admin-monitoring','admin-users','admin-results']
+    : ['peserta-exams','peserta-results'];
+  const lastView = localStorage.getItem('examapp_last_view');
+  showView(validViews.includes(lastView) ? lastView : validViews[0]);
 }
 
 /* =====================================================================
@@ -473,13 +519,14 @@ function showView(id){
   if (target) target.classList.add('active');
   const navBtn = document.getElementById('nav-' + id.split('-').slice(0,2).join('-'));
   if (navBtn) navBtn.classList.add('active');
+  localStorage.setItem('examapp_last_view', id);
 
-  if (monitoringInterval){ clearInterval(monitoringInterval); monitoringInterval = null; }
+  if (id !== 'admin-monitoring') stopMonitoring();
 
   if (id === 'admin-exams') loadExams();
   if (id === 'admin-users') loadUsers();
   if (id === 'admin-results') loadResults(true);
-  if (id === 'admin-monitoring'){ loadMonitoring(); monitoringInterval = setInterval(loadMonitoring, 8000); }
+  if (id === 'admin-monitoring') startMonitoring();
   if (id === 'peserta-exams') loadPesertaExams();
   if (id === 'peserta-results') loadPesertaResults();
 }
@@ -1018,22 +1065,25 @@ async function finalizeGrading(attemptId){
 }
 
 /* =====================================================================
-   ADMIN: LIVE MONITORING
+   ADMIN: LIVE MONITORING (realtime)
 ===================================================================== */
 let questionCountCache = {}; // exam_id -> total soal
+let monitoringAttempts = []; // cache attempt yang sedang dipantau
+let monitoringTickInterval = null; // update tampilan countdown tiap 1 detik
+let monitoringChannel = null; // koneksi realtime Supabase
 
-async function loadMonitoring(){
-  const c = document.getElementById('monitoringContainer');
+async function loadMonitoringData(){
   const { data: attempts, error } = await sb
     .from('exam_attempts')
     .select('*, exams(title,duration_minutes,end_time), profiles(full_name)')
     .eq('status', 'in_progress')
     .order('started_at', { ascending:false });
 
-  if (error){ c.innerHTML = '<div class="empty-state">Gagal memuat data: ' + escapeHtml(error.message) + '</div>'; return; }
-  if (!attempts.length){ c.innerHTML = '<div class="empty-state">Tidak ada peserta yang sedang mengerjakan ujian saat ini.</div>'; return; }
+  if (error){
+    document.getElementById('monitoringContainer').innerHTML = '<div class="empty-state">Gagal memuat data: ' + escapeHtml(error.message) + '</div>';
+    return;
+  }
 
-  // hitung total soal per exam (cache supaya tidak query berulang tiap refresh)
   const uniqueExamIds = [...new Set(attempts.map(a => a.exam_id))];
   await Promise.all(uniqueExamIds.map(async examId => {
     if (questionCountCache[examId] !== undefined) return;
@@ -1041,23 +1091,38 @@ async function loadMonitoring(){
     questionCountCache[examId] = count || 0;
   }));
 
-  // hitung jumlah soal yang sudah dijawab per attempt
-  const answeredCounts = await Promise.all(attempts.map(async a => {
-    const { count } = await sb.from('answers').select('id', { count:'exact', head:true }).eq('attempt_id', a.id).neq('answer_text', '');
-    return count || 0;
-  }));
+  const answeredCounts = await Promise.all(attempts.map(a => fetchAnsweredCount(a.id)));
+  monitoringAttempts = attempts.map((a, i) => ({ ...a, answered: answeredCounts[i] }));
+  renderMonitoringTable();
+}
+
+async function fetchAnsweredCount(attemptId){
+  const { count } = await sb.from('answers').select('id', { count:'exact', head:true }).eq('attempt_id', attemptId).neq('answer_text', '');
+  return count || 0;
+}
+
+async function updateAnsweredCountFor(attemptId){
+  const entry = monitoringAttempts.find(a => a.id === attemptId);
+  if (!entry) return; // bukan attempt yang lagi dipantau (mis. sudah submit)
+  entry.answered = await fetchAnsweredCount(attemptId);
+  renderMonitoringTable();
+}
+
+function renderMonitoringTable(){
+  const c = document.getElementById('monitoringContainer');
+  if (!monitoringAttempts.length){ c.innerHTML = '<div class="empty-state">Tidak ada peserta yang sedang mengerjakan ujian saat ini.</div>'; return; }
 
   const now = Date.now();
   c.innerHTML = `
     <table><thead><tr><th>Peserta</th><th>Ujian</th><th>Percobaan</th><th>Mulai</th><th>Sisa Waktu</th><th>Progres Soal</th></tr></thead>
     <tbody>
-      ${attempts.map((a, i) => {
+      ${monitoringAttempts.map(a => {
         const total = questionCountCache[a.exam_id] || 0;
-        const answered = answeredCounts[i];
+        const answered = a.answered || 0;
         const deadline = new Date(a.started_at).getTime() + (a.exams?.duration_minutes || 0) * 60000;
         const effectiveDeadline = a.exams?.end_time ? Math.min(deadline, new Date(a.exams.end_time).getTime()) : deadline;
         const remainMs = effectiveDeadline - now;
-        const remainLabel = remainMs <= 0 ? 'Waktu habis' : Math.floor(remainMs/60000) + ' menit ' + Math.floor((remainMs%60000)/1000) + ' detik';
+        const remainLabel = remainMs <= 0 ? 'Waktu habis' : String(Math.floor(remainMs/60000)).padStart(2,'0') + ':' + String(Math.floor((remainMs%60000)/1000)).padStart(2,'0');
         const pct = total ? Math.round((answered/total)*100) : 0;
         return `
           <tr>
@@ -1070,6 +1135,26 @@ async function loadMonitoring(){
           </tr>`;
       }).join('')}
     </tbody></table>`;
+}
+
+function startMonitoring(){
+  loadMonitoringData();
+  if (monitoringTickInterval) clearInterval(monitoringTickInterval);
+  monitoringTickInterval = setInterval(renderMonitoringTable, 1000); // animasikan sisa waktu tiap detik
+
+  if (monitoringChannel) sb.removeChannel(monitoringChannel);
+  monitoringChannel = sb.channel('admin-monitoring')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_attempts' }, () => loadMonitoringData())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'answers' }, payload => {
+      const attemptId = payload.new?.attempt_id || payload.old?.attempt_id;
+      if (attemptId) updateAnsweredCountFor(attemptId);
+    })
+    .subscribe();
+}
+
+function stopMonitoring(){
+  if (monitoringTickInterval){ clearInterval(monitoringTickInterval); monitoringTickInterval = null; }
+  if (monitoringChannel){ sb.removeChannel(monitoringChannel); monitoringChannel = null; }
 }
 
 /* =====================================================================
