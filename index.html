@@ -263,6 +263,14 @@
       <div id="resultsContainer"></div>
     </div>
 
+    <!-- ---- ADMIN: LIVE MONITORING ---- -->
+    <div class="view" id="view-admin-monitoring">
+      <div class="main-header">
+        <div><h2>Pemantauan Ujian</h2><p class="muted">Peserta yang sedang mengerjakan ujian saat ini, diperbarui otomatis.</p></div>
+      </div>
+      <div id="monitoringContainer"></div>
+    </div>
+
     <!-- ---- PESERTA: EXAM LIST ---- -->
     <div class="view" id="view-peserta-exams">
       <div class="main-header">
@@ -333,6 +341,7 @@ let currentQIndex = 0;
 let examTimerInterval = null;
 let examDeadline = null;
 let violationCount = 0;
+let monitoringInterval = null;
 
 /* =====================================================================
    INIT
@@ -404,6 +413,7 @@ async function submitAuth(){
 }
 
 async function signOut(){
+  if (monitoringInterval){ clearInterval(monitoringInterval); monitoringInterval = null; }
   await sb.auth.signOut();
   currentUser = null; currentProfile = null;
   document.getElementById('appShell').classList.add('hidden');
@@ -439,6 +449,7 @@ function buildSidebarNav(){
   const items = currentProfile.role === 'admin'
     ? [
         ['admin-exams','Ujian'],
+        ['admin-monitoring','Pemantauan Ujian'],
         ['admin-users','Pengguna'],
         ['admin-results','Hasil & Nilai'],
       ]
@@ -463,9 +474,12 @@ function showView(id){
   const navBtn = document.getElementById('nav-' + id.split('-').slice(0,2).join('-'));
   if (navBtn) navBtn.classList.add('active');
 
+  if (monitoringInterval){ clearInterval(monitoringInterval); monitoringInterval = null; }
+
   if (id === 'admin-exams') loadExams();
   if (id === 'admin-users') loadUsers();
   if (id === 'admin-results') loadResults(true);
+  if (id === 'admin-monitoring'){ loadMonitoring(); monitoringInterval = setInterval(loadMonitoring, 8000); }
   if (id === 'peserta-exams') loadPesertaExams();
   if (id === 'peserta-results') loadPesertaResults();
 }
@@ -477,6 +491,11 @@ function fmtDate(iso){
 }
 function escapeHtml(s){
   return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function passStatusBadge(passingScore, score){
+  if (passingScore == null || score == null) return '';
+  const passed = score >= passingScore;
+  return `<span class="badge ${passed ? 'accent' : 'danger'}">${passed ? 'Lulus' : 'Tidak Lulus'}</span>`;
 }
 
 /* =====================================================================
@@ -508,6 +527,7 @@ async function loadExams(){
         <div style="text-align:right;">
           <span class="badge ${e.is_active ? 'accent' : 'neutral'}">${e.is_active ? 'Aktif' : 'Nonaktif'}</span><br/>
           <span class="badge ${e.restricted ? 'warn' : 'neutral'}" style="margin-top:6px;">${e.restricted ? 'Peserta terbatas' : 'Semua peserta'}</span>
+          ${e.passing_score != null ? `<br/><span class="badge neutral" style="margin-top:6px;">KKM: ${e.passing_score}</span>` : ''}
         </div>
       </div>
       <div class="row-actions" style="margin-top:12px;">
@@ -538,6 +558,9 @@ function openExamModal(examId){
       <div class="field"><label>Waktu Mulai</label><input id="mExamStart" type="datetime-local" value="${toLocalInput(e?.start_time)}" /></div>
       <div class="field"><label>Waktu Selesai</label><input id="mExamEnd" type="datetime-local" value="${toLocalInput(e?.end_time)}" /></div>
     </div>
+    <div class="field"><label>Nilai Minimum Kelulusan / KKM (opsional)</label>
+      <input id="mExamPassingScore" type="number" min="0" step="0.5" placeholder="Kosongkan jika tidak perlu status lulus/tidak lulus" value="${e && e.passing_score != null ? e.passing_score : ''}" />
+    </div>
     <div class="field"><label>Siapa yang boleh mengikuti ujian ini?</label>
       <select id="mExamRestricted">
         <option value="false" ${!e || !e.restricted ? 'selected':''}>Semua peserta</option>
@@ -559,6 +582,7 @@ async function saveExam(examId){
     duration_minutes: parseInt(document.getElementById('mExamDuration').value || '60', 10),
     shuffle_questions: document.getElementById('mExamShuffle').value === 'true',
     restricted: document.getElementById('mExamRestricted').value === 'true',
+    passing_score: document.getElementById('mExamPassingScore').value.trim() === '' ? null : parseFloat(document.getElementById('mExamPassingScore').value),
     start_time: document.getElementById('mExamStart').value ? new Date(document.getElementById('mExamStart').value).toISOString() : null,
     end_time: document.getElementById('mExamEnd').value ? new Date(document.getElementById('mExamEnd').value).toISOString() : null,
   };
@@ -890,14 +914,14 @@ async function loadResults(refreshFilter){
     sel.innerHTML = '<option value="">Semua Ujian</option>' + (exams||[]).map(e => `<option value="${e.id}">${escapeHtml(e.title)}</option>`).join('');
   }
   const examFilter = document.getElementById('resultsExamFilter').value;
-  let query = sb.from('exam_attempts').select('*, exams(title), profiles(full_name)').order('started_at', { ascending:false });
+  let query = sb.from('exam_attempts').select('*, exams(title,passing_score), profiles(full_name)').order('started_at', { ascending:false });
   if (examFilter) query = query.eq('exam_id', examFilter);
   const { data, error } = await query;
   const c = document.getElementById('resultsContainer');
   if (error){ c.innerHTML = '<div class="empty-state">Gagal memuat hasil: ' + escapeHtml(error.message) + '</div>'; return; }
   if (!data.length){ c.innerHTML = '<div class="empty-state">Belum ada pengerjaan ujian.</div>'; return; }
   c.innerHTML = `
-    <table><thead><tr><th>Peserta</th><th>Ujian</th><th>Percobaan</th><th>Status</th><th>Nilai</th><th>Dikumpulkan</th><th></th></tr></thead>
+    <table><thead><tr><th>Peserta</th><th>Ujian</th><th>Percobaan</th><th>Status</th><th>Nilai</th><th>Kelulusan</th><th>Dikumpulkan</th><th></th></tr></thead>
     <tbody>
       ${data.map(a => `
         <tr>
@@ -906,6 +930,7 @@ async function loadResults(refreshFilter){
           <td>${a.attempt_number > 1 ? 'Remedial #' + a.attempt_number : 'Ke-1'}</td>
           <td><span class="badge ${a.status==='graded'?'accent':a.status==='submitted'?'warn':'neutral'}">${statusLabel(a.status)}</span></td>
           <td>${a.score != null ? a.score + ' / ' + a.max_score : '-'}</td>
+          <td>${passStatusBadge(a.exams?.passing_score, a.score) || '<span class="muted">-</span>'}</td>
           <td class="muted">${fmtDate(a.submitted_at)}</td>
           <td class="row-actions">
             <button class="small secondary" onclick="openGradingModal('${a.id}')">Lihat / Nilai</button>
@@ -990,6 +1015,61 @@ async function finalizeGrading(attemptId){
   const { error } = await sb.from('exam_attempts').update({ score: total, max_score: max, status:'graded' }).eq('id', attemptId);
   if (error){ alert('Gagal menyimpan penilaian: ' + error.message); return; }
   closeModal(); loadResults();
+}
+
+/* =====================================================================
+   ADMIN: LIVE MONITORING
+===================================================================== */
+let questionCountCache = {}; // exam_id -> total soal
+
+async function loadMonitoring(){
+  const c = document.getElementById('monitoringContainer');
+  const { data: attempts, error } = await sb
+    .from('exam_attempts')
+    .select('*, exams(title,duration_minutes,end_time), profiles(full_name)')
+    .eq('status', 'in_progress')
+    .order('started_at', { ascending:false });
+
+  if (error){ c.innerHTML = '<div class="empty-state">Gagal memuat data: ' + escapeHtml(error.message) + '</div>'; return; }
+  if (!attempts.length){ c.innerHTML = '<div class="empty-state">Tidak ada peserta yang sedang mengerjakan ujian saat ini.</div>'; return; }
+
+  // hitung total soal per exam (cache supaya tidak query berulang tiap refresh)
+  const uniqueExamIds = [...new Set(attempts.map(a => a.exam_id))];
+  await Promise.all(uniqueExamIds.map(async examId => {
+    if (questionCountCache[examId] !== undefined) return;
+    const { count } = await sb.from('questions').select('id', { count:'exact', head:true }).eq('exam_id', examId);
+    questionCountCache[examId] = count || 0;
+  }));
+
+  // hitung jumlah soal yang sudah dijawab per attempt
+  const answeredCounts = await Promise.all(attempts.map(async a => {
+    const { count } = await sb.from('answers').select('id', { count:'exact', head:true }).eq('attempt_id', a.id).neq('answer_text', '');
+    return count || 0;
+  }));
+
+  const now = Date.now();
+  c.innerHTML = `
+    <table><thead><tr><th>Peserta</th><th>Ujian</th><th>Percobaan</th><th>Mulai</th><th>Sisa Waktu</th><th>Progres Soal</th></tr></thead>
+    <tbody>
+      ${attempts.map((a, i) => {
+        const total = questionCountCache[a.exam_id] || 0;
+        const answered = answeredCounts[i];
+        const deadline = new Date(a.started_at).getTime() + (a.exams?.duration_minutes || 0) * 60000;
+        const effectiveDeadline = a.exams?.end_time ? Math.min(deadline, new Date(a.exams.end_time).getTime()) : deadline;
+        const remainMs = effectiveDeadline - now;
+        const remainLabel = remainMs <= 0 ? 'Waktu habis' : Math.floor(remainMs/60000) + ' menit ' + Math.floor((remainMs%60000)/1000) + ' detik';
+        const pct = total ? Math.round((answered/total)*100) : 0;
+        return `
+          <tr>
+            <td>${escapeHtml(a.profiles?.full_name || '-')}</td>
+            <td>${escapeHtml(a.exams?.title || '-')}</td>
+            <td>${a.attempt_number > 1 ? 'Remedial #' + a.attempt_number : 'Ke-1'}</td>
+            <td class="muted">${fmtDate(a.started_at)}</td>
+            <td><span class="badge ${remainMs <= 0 ? 'danger' : remainMs < 5*60000 ? 'warn' : 'accent'}">${remainLabel}</span></td>
+            <td>${answered} dari ${total} soal <span class="muted">(${pct}%)</span></td>
+          </tr>`;
+      }).join('')}
+    </tbody></table>`;
 }
 
 /* =====================================================================
@@ -1277,12 +1357,12 @@ function showViolationToast(msg){
    PESERTA: MY RESULTS
 ===================================================================== */
 async function loadPesertaResults(){
-  const { data, error } = await sb.from('exam_attempts').select('*, exams(title)').eq('user_id', currentProfile.id).order('started_at', { ascending:false });
+  const { data, error } = await sb.from('exam_attempts').select('*, exams(title,passing_score)').eq('user_id', currentProfile.id).order('started_at', { ascending:false });
   const c = document.getElementById('pesertaResultsContainer');
   if (error){ c.innerHTML = '<div class="empty-state">Gagal memuat nilai: ' + escapeHtml(error.message) + '</div>'; return; }
   if (!data.length){ c.innerHTML = '<div class="empty-state">Anda belum mengerjakan ujian apa pun.</div>'; return; }
   c.innerHTML = `
-    <table><thead><tr><th>Ujian</th><th>Percobaan</th><th>Status</th><th>Nilai</th><th>Dikumpulkan</th></tr></thead>
+    <table><thead><tr><th>Ujian</th><th>Percobaan</th><th>Status</th><th>Nilai</th><th>Kelulusan</th><th>Dikumpulkan</th></tr></thead>
     <tbody>
       ${data.map(a => `
         <tr>
@@ -1290,6 +1370,7 @@ async function loadPesertaResults(){
           <td>${a.attempt_number > 1 ? 'Remedial #' + a.attempt_number : 'Ke-1'}</td>
           <td><span class="badge ${a.status==='graded'?'accent':a.status==='submitted'?'warn':'neutral'}">${statusLabel(a.status)}</span></td>
           <td>${a.score != null ? a.score + ' / ' + a.max_score : 'Menunggu penilaian'}</td>
+          <td>${passStatusBadge(a.exams?.passing_score, a.score) || '<span class="muted">-</span>'}</td>
           <td class="muted">${fmtDate(a.submitted_at)}</td>
         </tr>
       `).join('')}
